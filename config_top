@@ -1,0 +1,8 @@
+echo -e %{l}
+/home/aarya/scripts/lemonbar/active_window.sh
+echo -e %{c}
+/home/aarya/scripts/lemonbar/bspwm.sh
+echo -e %{r}
+/home/aarya/scripts/lemonbar/volume.sh
+/home/aarya/scripts/lemonbar/battery.sh
+/home/aarya/scripts/lemonbar/date.sh

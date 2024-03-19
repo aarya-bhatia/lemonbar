@@ -18,7 +18,7 @@ struct Module {
     char read_buf[MAX_BUFFER_SIZE];
     char buffer[MAX_BUFFER_SIZE];
     int nread;
-    const char **args;
+	char *command;
     struct Module *next;
     bool escape;
     const char *prefix;
@@ -31,7 +31,7 @@ void setup();
 void start();
 
 unsigned int num_modules();
-void add_module(const char *args[], bool escape, const char *prefix);
+void add_module(const char *command, bool escape, const char *prefix);
 void free_module(struct Module *module);
 void remove_module(struct Module *module);
 

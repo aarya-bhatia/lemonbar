@@ -22,9 +22,9 @@ unsigned int num_modules()
     return num_modules;
 }
 
-void add_module(const char *args[], bool escape, const char *prefix)
+void add_module(const char *command, bool escape, const char *prefix)
 {
-    assert(args);
+    assert(command);
 
     struct Module *module = calloc(1, sizeof *module);
     if (!module) {
@@ -34,7 +34,7 @@ void add_module(const char *args[], bool escape, const char *prefix)
     memset(module->buffer, 0, sizeof(module->buffer));
     memset(module->buffer, 0, sizeof(module->read_buf));
 
-    module->args = args;
+    module->command = strdup(command);
     module->id = num_modules();
     module->escape = escape;
     module->prefix = prefix;
@@ -52,11 +52,11 @@ void add_module(const char *args[], bool escape, const char *prefix)
         dup2(module->fd[1], 1);
         close(module->fd[0]);
         close(module->fd[1]);
-        execvp(module->args[0], (char **)module->args);
+        execlp(SHELL, SHELL, "-c", command, NULL);
         exit(1);
     }
 
-    fprintf(stderr, "started module: %d\n", module->id);
+    fprintf(stderr, "started module %d: %s\n", module->id, command);
     close(module->fd[1]);
 
     struct epoll_event ev;

@@ -10,7 +10,6 @@
 #include <wait.h>
 
 #define SPACING "   "
-#define PYTHON3 "python3"
 #define MAX_EVENTS 10
 #define SHELL "/bin/sh"
 
@@ -18,6 +17,38 @@ int epoll_fd;
 
 volatile sig_atomic_t sigint_received = 0;
 volatile sig_atomic_t sigchld_received = 0;
+
+/**
+ * To read the config file and add the specified modules
+ */
+void load_modules(const char *config_filename)
+{
+    FILE *file = fopen(config_filename, "r");
+    if (!file) {
+        fprintf(stderr, "File not found: %s\n", config_filename);
+        exit(1);
+    }
+
+    char *line = NULL;
+    size_t size = 0;
+    int n;
+    while ((n = getline(&line, &size, file)) > 0) {
+        if (line[n - 1] == '\n') {
+            line[n - 1] = 0;
+        }
+
+        add_module(line, false, NULL);
+    }
+    free(line);
+
+    int num = num_modules();
+    if (num == 0) {
+        fputs("no modules are avilable", stderr);
+        exit(0);
+    }
+
+    fprintf(stderr, "num modules added: %u\n", num_modules());
+}
 
 void display()
 {
@@ -127,7 +158,7 @@ void handle_sigchld()
     sigchld_received = 0;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     signal(SIGCHLD, on_sigchld);
     signal(SIGINT, on_sigint);
@@ -138,23 +169,12 @@ int main()
         die("epoll_create1");
     }
 
-    // add_module((const char *[]){"/home/aarya/scripts/lemonbar/apps.sh", NULL}, false, NULL);
-    add_module((const char *[]){"/home/aarya/scripts/lemonbar/kernel.sh", NULL}, false, "%{l}");
-    add_module((const char *[]){"/home/aarya/scripts/lemonbar/uptime.sh", NULL}, false, "%{c}");
-    add_module((const char *[]){PYTHON3, "/home/aarya/scripts/lemonbar/disk.py", NULL}, false, "%{r}");
-    add_module((const char *[]){"/home/aarya/scripts/lemonbar/packages.sh", NULL}, false, NULL);
-    add_module((const char *[]){PYTHON3, "/home/aarya/scripts/cpu.py", NULL}, false, NULL);
-    add_module((const char *[]){PYTHON3, "/home/aarya/scripts/memory.py", NULL}, false, NULL);
-    add_module((const char *[]){PYTHON3, "/home/aarya/scripts/weather.py", NULL}, false, NULL);
-    add_module((const char *[]){"/home/aarya/scripts/lemonbar/wifi.sh", NULL}, false, NULL);
-
-    int n = num_modules();
-    if (n == 0) {
-        fputs("no modules are avilable", stderr);
-        exit(0);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <config_filename>\n", argv[0]);
+        return 1;
     }
 
-    fprintf(stderr, "num modules added: %u\n", num_modules());
+    load_modules(argv[1]);
 
     while (!sigint_received) {
         struct epoll_event events[MAX_EVENTS];
@@ -176,6 +196,8 @@ int main()
         if (sigchld_received) {
             handle_sigchld();
         }
+
+        usleep(100 * 1e3); // 100ms
     }
 
     for (struct Module *module = modules; module; module = module->next) {
