@@ -78,6 +78,7 @@ void display()
     display_buffer[index] = 0;
 
     write(1, display_buffer, index);
+	free(display_buffer);
 }
 
 void on_sigchld(int sig)
