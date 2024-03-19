@@ -31,7 +31,7 @@ start_bottom() {
 }
 
 kill() {
-	pkill -f /home/aarya/.config/lemonbar/bin/main
+	pkill -f /home/aarya/repos/aarya-bhatia/lemonbar/bin/main
 	pkill -f /home/aarya/scripts/lemonbar
 	pkill -x lemonbar
 }
