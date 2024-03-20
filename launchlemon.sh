@@ -11,9 +11,7 @@ project_monitor() {
 }
 
 start_top() {
-	# bin/main config_top | project_monitor |
-	bin/main config_top |
-		lemonbar -p -g x24++ \
+	bin/topbar | lemonbar -p -g x24++ \
 		-F#ffffff -B#222222 -U#268BD2 -u 2 \
 		-f "FreeMono:size=10" \
 		-f "Font Awesome 6 Free"  \
@@ -22,8 +20,7 @@ start_top() {
 }
 
 start_bottom() {
-	bin/main config_bottom | project_monitor |
-		lemonbar -b -p -g x24++ \
+	bin/bottombar | lemonbar -b -p -g x24++ \
 		-F#ffffff -B#222222 -U#268BD2 -u 2 \
 		-f "FreeMono:size=10" \
 		-f "Font Awesome 6 Free"  \
@@ -32,9 +29,10 @@ start_bottom() {
 }
 
 kill() {
-	pkill -f bin/main
-	pkill -f /home/aarya/scripts/lemonbar
+	pkill -f bin/topbar
+	pkill -f bin/bottombar
 	pkill -x lemonbar
+	pkill -f lemonbar/scripts
 }
 
 kill

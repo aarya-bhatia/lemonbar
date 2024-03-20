@@ -87,7 +87,7 @@ void run_once(struct Module *module)
         dup2(module->fd[1], 1);
         close(module->fd[0]);
         close(module->fd[1]);
-        log_debug("executing command: %s -c %s", SHELL, module->command);
+        // log_debug("executing command: %s -c %s", SHELL, module->command);
         if (execlp(SHELL, SHELL, "-c", module->command, NULL) < 0) {
             die("execlp");
         }
@@ -110,7 +110,7 @@ void run_once(struct Module *module)
         module->buffer[module->nread - 1] = 0;
     }
 
-    log_debug("received %d bytes from module %d", module->nread, module->id);
+    // log_debug("received %d bytes from module %d", module->nread, module->id);
     close(module->fd[0]);
     waitpid(pid, NULL, 0);
     clock_gettime(CLOCK_MONOTONIC, &module->last_updated);
@@ -210,7 +210,7 @@ bool check_update_interval()
         double diff = (now.tv_sec - itr->last_updated.tv_sec) + (now.tv_nsec - itr->last_updated.tv_nsec) * 1e-9;
         if (diff - itr->interval > 0) {
             log_info("Running module %d on interval", itr->id);
-            log_debug("module %d: time difference: %f", itr->id, diff);
+            // log_debug("module %d: time difference: %f", itr->id, diff);
             run_once(itr);
             updated = true;
         }
@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    log_debug("num modules added: %u", num_modules());
+    // log_debug("num modules added: %u", num_modules());
 
     while (!sigint_received) {
         struct epoll_event events[MAX_EVENTS];
@@ -273,8 +273,6 @@ int main(int argc, char *argv[])
         if (check_update_interval()) {
             display();
         }
-
-        sleep(1);
     }
 
     for (struct Module *module = modules; module; module = module->next) {
