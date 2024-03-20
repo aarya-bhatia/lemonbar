@@ -71,26 +71,34 @@ void on_sigusr1(int sig)
 
 void run_once(struct Module *module)
 {
+    module->fd[0] = 0;
+    module->fd[1] = 0;
+
+    if (pipe(module->fd) < 0) {
+        die("pipe");
+    }
+
     pid_t pid = fork();
     if (pid < 0) {
         die("fork");
     }
 
-    pipe(module->fd);
-
     if (pid == 0) {
         dup2(module->fd[1], 1);
         close(module->fd[0]);
         close(module->fd[1]);
-        execlp(SHELL, SHELL, "-c", module->command, NULL);
-        exit(1);
+        log_debug("executing command: %s -c %s", SHELL, module->command);
+        if (execlp(SHELL, SHELL, "-c", module->command, NULL) < 0) {
+            die("execlp");
+        }
     }
+
     close(module->fd[1]);
 
     module->nread = 0;
 
     while (1) {
-        int n = read(module->fd[0], module->buffer + module->nread, sizeof module->buffer - module->nread - 1);
+        int n = read(module->fd[0], module->buffer + module->nread, MAX_BUFFER_SIZE - module->nread - 1);
         if (n <= 0) {
             break;
         }
@@ -98,19 +106,28 @@ void run_once(struct Module *module)
         module->buffer[module->nread] = 0;
     }
 
+    if (module->nread > 0 && module->buffer[module->nread - 1] == '\n') {
+        module->buffer[module->nread - 1] = 0;
+    }
+
+    log_debug("received %d bytes from module %d", module->nread, module->id);
     close(module->fd[0]);
     waitpid(pid, NULL, 0);
     clock_gettime(CLOCK_MONOTONIC, &module->last_updated);
 }
 
-void handle_sigusr1()
+bool handle_sigusr1()
 {
+    bool updated = false;
     for (struct Module *module = modules; module; module = module->next) {
         if (module->type == UPDATE_SIGNAL) {
             log_info("Running module %d on SIGUSR1", module->id);
             run_once(module);
+            updated = true;
         }
     }
+
+    return updated;
 }
 
 void handle_events(struct epoll_event events[MAX_EVENTS], int num_events)
@@ -242,7 +259,9 @@ int main(int argc, char *argv[])
         }
 
         if (sigusr_received) {
-            handle_sigusr1();
+            if (handle_sigusr1()) {
+                display();
+            }
             sigusr_received = 0;
         }
 
@@ -259,8 +278,8 @@ int main(int argc, char *argv[])
     }
 
     for (struct Module *module = modules; module; module = module->next) {
-        log_warn("sending SIGTERM to module %d", module->id);
         if (module->type == UPDATE_PERSIST) {
+            log_warn("sending SIGTERM to module %d", module->id);
             kill(module->pid, SIGTERM);
         }
     }
@@ -270,11 +289,12 @@ int main(int argc, char *argv[])
         if (modules->type == UPDATE_PERSIST) {
             waitpid(modules->pid, NULL, 0);
         }
+        log_warn("freeing module %d", modules->id);
         free_module(modules);
         modules = tmp;
     }
 
-    fputs("goodbye!", stderr);
+    log_fatal("goodbye!");
     close(epoll_fd);
     return 0;
 }

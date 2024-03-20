@@ -58,7 +58,7 @@ struct Module *add_module(const char *command, const char *prefix, int type, int
         exit(1);
     }
 
-    fprintf(stderr, "started module %d: %s\n", module->id, command);
+    log_info("started module %d: %s", module->id, command);
     close(module->fd[1]);
 
     struct epoll_event ev;
@@ -99,7 +99,7 @@ void remove_module(struct Module *module)
         }
     }
 
-    fprintf(stderr, "module %u removed...\n", module->id);
+    log_info("module %u removed...", module->id);
     free_module(module);
 }
 

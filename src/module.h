@@ -1,5 +1,6 @@
 #pragma once
 
+#include "log.h"
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -9,7 +10,7 @@
 #define MAX_BUFFER_SIZE 256
 
 #define die(msg)                                                                                                       \
-    perror(msg);                                                                                                       \
+    log_error(msg);                                                                                                    \
     exit(1);
 
 enum { UPDATE_PERSIST, UPDATE_INTERVAL, UPDATE_SIGNAL };
