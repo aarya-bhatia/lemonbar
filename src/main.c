@@ -6,49 +6,45 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/select.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 
 #define SPACING "   "
 #define MAX_EVENTS 10
 #define SHELL "/bin/sh"
+#define UPDATE_INTERVAL_MS 5000
 
 int epoll_fd;
 
 volatile sig_atomic_t sigint_received = 0;
 volatile sig_atomic_t sigchld_received = 0;
+volatile sig_atomic_t sigusr_received = 0;
 
-/**
- * To read the config file and add the specified modules
- */
-void load_modules(const char *config_filename)
-{
-    FILE *file = fopen(config_filename, "r");
-    if (!file) {
-        fprintf(stderr, "File not found: %s\n", config_filename);
-        exit(1);
-    }
-
-    char *line = NULL;
-    size_t size = 0;
-    int n;
-    while ((n = getline(&line, &size, file)) > 0) {
-        if (line[n - 1] == '\n') {
-            line[n - 1] = 0;
-        }
-
-        add_module(line, false, NULL);
-    }
-    free(line);
-
-    int num = num_modules();
-    if (num == 0) {
-        fputs("no modules are avilable", stderr);
-        exit(0);
-    }
-
-    fprintf(stderr, "num modules added: %u\n", num_modules());
-}
+// /**
+//  * To read the config file and add the specified modules
+//  */
+// void load_modules(const char *config_filename)
+// {
+//     FILE *file = fopen(config_filename, "r");
+//     if (!file) {
+//         fprintf(stderr, "File not found: %s\n", config_filename);
+//         exit(1);
+//     }
+//
+//     char *line = NULL;
+//     size_t size = 0;
+//     int n;
+//     while ((n = getline(&line, &size, file)) > 0) {
+//         if (line[n - 1] == '\n') {
+//             line[n - 1] = 0;
+//         }
+//
+//         add_module(line);
+//     }
+//     free(line);
+// }
 
 void display()
 {
@@ -78,7 +74,7 @@ void display()
     display_buffer[index] = 0;
 
     write(1, display_buffer, index);
-	free(display_buffer);
+    free(display_buffer);
 }
 
 void on_sigchld(int sig)
@@ -89,6 +85,54 @@ void on_sigchld(int sig)
 void on_sigint(int sig)
 {
     sigint_received = 1;
+}
+
+void on_sigusr1(int sig)
+{
+    sigusr_received = 1;
+}
+
+void run_once(struct Module *module)
+{
+    pid_t pid = fork();
+    if (pid < 0) {
+        die("fork");
+    }
+
+    pipe(module->fd);
+
+    if (pid == 0) {
+        dup2(module->fd[1], 1);
+        close(module->fd[0]);
+        close(module->fd[1]);
+        execlp(SHELL, SHELL, "-c", module->command, NULL);
+        exit(1);
+    }
+    close(module->fd[1]);
+
+    module->nread = 0;
+
+    while (1) {
+        int n = read(module->fd[0], module->buffer + module->nread, sizeof module->buffer - module->nread - 1);
+        if (n <= 0) {
+            break;
+        }
+        module->nread += n;
+        module->buffer[module->nread] = 0;
+    }
+
+    close(module->fd[0]);
+    waitpid(pid, NULL, 0);
+}
+
+void handle_sigusr1()
+{
+    for (struct Module *module = modules; module; module = module->next) {
+        if (module->type == UPDATE_SIGNAL) {
+            fprintf(stderr, "Running module %d on SIGUSR1\n", module->id);
+            run_once(module);
+        }
+    }
 }
 
 void handle_events(struct epoll_event events[MAX_EVENTS], int num_events)
@@ -155,8 +199,23 @@ void handle_sigchld()
             }
         }
     }
+}
 
-    sigchld_received = 0;
+void check_update_interval()
+{
+    time_t now;
+    time(&now);
+
+    for (struct Module *itr = modules; itr; itr = itr->next) {
+        if (itr->type != UPDATE_INTERVAL_MS) {
+            continue;
+        }
+
+        if (difftime(now, itr->last_updated) > itr->interval) {
+            fprintf(stderr, "Running module %d on interval\n", itr->id);
+            run_once(itr);
+        }
+    }
 }
 
 int main(int argc, char *argv[])
@@ -164,23 +223,33 @@ int main(int argc, char *argv[])
     signal(SIGCHLD, on_sigchld);
     signal(SIGINT, on_sigint);
     signal(SIGTERM, on_sigint);
+    signal(SIGUSR1, on_sigusr1);
 
     epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
         die("epoll_create1");
     }
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <config_filename>\n", argv[0]);
-        return 1;
+    // if (argc < 2) {
+    //     fprintf(stderr, "Usage: %s <config_filename>\n", argv[0]);
+    //     return 1;
+    // }
+    //
+    // load_modules(argv[1]);
+    setup();
+
+    int num = num_modules();
+    if (num == 0) {
+        fputs("no modules are avilable", stderr);
+        exit(0);
     }
 
-    load_modules(argv[1]);
+    fprintf(stderr, "num modules added: %u\n", num_modules());
 
     while (!sigint_received) {
         struct epoll_event events[MAX_EVENTS];
         memset(events, 0, sizeof events);
-        int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, UPDATE_INTERVAL_MS);
         if (num_events == -1) {
             perror("epoll_wait");
             if (errno != EINTR) {
@@ -194,9 +263,17 @@ int main(int argc, char *argv[])
             display();
         }
 
+        if (sigusr_received) {
+            handle_sigusr1();
+            sigusr_received = 0;
+        }
+
         if (sigchld_received) {
             handle_sigchld();
+            sigchld_received = 0;
         }
+
+        check_update_interval();
 
         usleep(100 * 1e3); // 100ms
     }

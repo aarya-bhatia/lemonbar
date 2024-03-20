@@ -22,7 +22,7 @@ unsigned int num_modules()
     return num_modules;
 }
 
-void add_module(const char *command, bool escape, const char *prefix)
+struct Module *add_module(const char *command, const char *prefix, int type, int interval)
 {
     assert(command);
 
@@ -36,8 +36,9 @@ void add_module(const char *command, bool escape, const char *prefix)
 
     module->command = strdup(command);
     module->id = num_modules();
-    module->escape = escape;
     module->prefix = prefix;
+    module->type = type;
+    module->interval = interval;
 
     if (pipe(module->fd) < 0) {
         die("pipe");
@@ -78,6 +79,7 @@ void add_module(const char *command, bool escape, const char *prefix)
     }
 
     module->pid = pid;
+    return module;
 }
 
 void remove_module(struct Module *module)
