@@ -1,20 +1,16 @@
 CC=gcc
 CFLAGS=-c -Wall -g -std=c99 -O0 -D_GNU_SOURCE
 
-SRC=$(wildcard src/*.c)
+SRC=src/main.c src/module.c src/log.c
 OBJS=$(SRC:src/%.c=obj/%.o)
 
-all: bin/main bin/topbar bin/bottombar
+all: bin/topbar bin/bottombar
 
-bin/main: $(OBJS)
+bin/topbar: obj/topbar.o $(OBJS)
 	mkdir -p bin/
 	$(CC) $^ -o $@
 
-bin/topbar: obj/main.o obj/module.o obj/topbar.o
-	mkdir -p bin/
-	$(CC) $^ -o $@
-
-bin/bottom_bar: obj/main.o obj/module.o obj/bottombar.o
+bin/bottombar: obj/bottombar.o $(OBJS)
 	mkdir -p bin/
 	$(CC) $^ -o $@
 

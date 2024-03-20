@@ -28,7 +28,7 @@ struct Module {
     char *ul_color;
     char *bg_color;
     char *fg_color;
-    time_t last_updated;
+    struct timespec last_updated;
     int type;
     int interval; /* seconds */
 };

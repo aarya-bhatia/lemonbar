@@ -1,3 +1,4 @@
+#include "log.h"
 #include "module.h"
 #include <errno.h>
 #include <stdbool.h>
@@ -21,30 +22,6 @@ int epoll_fd;
 volatile sig_atomic_t sigint_received = 0;
 volatile sig_atomic_t sigchld_received = 0;
 volatile sig_atomic_t sigusr_received = 0;
-
-// /**
-//  * To read the config file and add the specified modules
-//  */
-// void load_modules(const char *config_filename)
-// {
-//     FILE *file = fopen(config_filename, "r");
-//     if (!file) {
-//         fprintf(stderr, "File not found: %s\n", config_filename);
-//         exit(1);
-//     }
-//
-//     char *line = NULL;
-//     size_t size = 0;
-//     int n;
-//     while ((n = getline(&line, &size, file)) > 0) {
-//         if (line[n - 1] == '\n') {
-//             line[n - 1] = 0;
-//         }
-//
-//         add_module(line);
-//     }
-//     free(line);
-// }
 
 void display()
 {
@@ -123,13 +100,14 @@ void run_once(struct Module *module)
 
     close(module->fd[0]);
     waitpid(pid, NULL, 0);
+    clock_gettime(CLOCK_MONOTONIC, &module->last_updated);
 }
 
 void handle_sigusr1()
 {
     for (struct Module *module = modules; module; module = module->next) {
         if (module->type == UPDATE_SIGNAL) {
-            fprintf(stderr, "Running module %d on SIGUSR1\n", module->id);
+            log_info("Running module %d on SIGUSR1", module->id);
             run_once(module);
         }
     }
@@ -149,7 +127,7 @@ void handle_events(struct epoll_event events[MAX_EVENTS], int num_events)
             }
 
             if (flag == 0) {
-                fprintf(stderr, "invalid module: %p (id=%d)\n", module, module->id);
+                log_info("invalid module: %p (id=%d)", module, module->id);
                 continue;
             }
 
@@ -186,9 +164,9 @@ void handle_sigchld()
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {
-            fprintf(stderr, "Child process %d exited with status %d\n", pid, WEXITSTATUS(status));
+            log_warn("Child process %d exited with status %d", pid, WEXITSTATUS(status));
         } else if (WIFSIGNALED(status)) {
-            fprintf(stderr, "Child process %d terminated by signal %d\n", pid, WTERMSIG(status));
+            log_warn("Child process %d terminated by signal %d", pid, WTERMSIG(status));
         }
 
         for (struct Module *itr = modules; itr; itr = itr->next) {
@@ -201,21 +179,27 @@ void handle_sigchld()
     }
 }
 
-void check_update_interval()
+bool check_update_interval()
 {
-    time_t now;
-    time(&now);
+    bool updated = false;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
 
     for (struct Module *itr = modules; itr; itr = itr->next) {
-        if (itr->type != UPDATE_INTERVAL_MS) {
+        if (itr->type != UPDATE_INTERVAL) {
             continue;
         }
 
-        if (difftime(now, itr->last_updated) > itr->interval) {
-            fprintf(stderr, "Running module %d on interval\n", itr->id);
+        double diff = (now.tv_sec - itr->last_updated.tv_sec) + (now.tv_nsec - itr->last_updated.tv_nsec) * 1e-9;
+        if (diff - itr->interval > 0) {
+            log_info("Running module %d on interval", itr->id);
+            log_debug("module %d: time difference: %f", itr->id, diff);
             run_once(itr);
+            updated = true;
         }
     }
+
+    return updated;
 }
 
 int main(int argc, char *argv[])
@@ -230,12 +214,6 @@ int main(int argc, char *argv[])
         die("epoll_create1");
     }
 
-    // if (argc < 2) {
-    //     fprintf(stderr, "Usage: %s <config_filename>\n", argv[0]);
-    //     return 1;
-    // }
-    //
-    // load_modules(argv[1]);
     setup();
 
     int num = num_modules();
@@ -244,7 +222,7 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    fprintf(stderr, "num modules added: %u\n", num_modules());
+    log_debug("num modules added: %u", num_modules());
 
     while (!sigint_received) {
         struct epoll_event events[MAX_EVENTS];
@@ -253,7 +231,7 @@ int main(int argc, char *argv[])
         if (num_events == -1) {
             perror("epoll_wait");
             if (errno != EINTR) {
-                fprintf(stderr, "errno=%d\n", errno);
+                log_fatal("errno=%d", errno);
                 exit(1);
             }
         }
@@ -273,19 +251,25 @@ int main(int argc, char *argv[])
             sigchld_received = 0;
         }
 
-        check_update_interval();
+        if (check_update_interval()) {
+            display();
+        }
 
-        usleep(100 * 1e3); // 100ms
+        sleep(1);
     }
 
     for (struct Module *module = modules; module; module = module->next) {
-        fprintf(stderr, "sending SIGTERM to module %d\n", module->id);
-        kill(module->pid, SIGTERM);
+        log_warn("sending SIGTERM to module %d", module->id);
+        if (module->type == UPDATE_PERSIST) {
+            kill(module->pid, SIGTERM);
+        }
     }
 
     while (modules) {
         struct Module *tmp = modules->next;
-        waitpid(modules->pid, NULL, 0);
+        if (modules->type == UPDATE_PERSIST) {
+            waitpid(modules->pid, NULL, 0);
+        }
         free_module(modules);
         modules = tmp;
     }

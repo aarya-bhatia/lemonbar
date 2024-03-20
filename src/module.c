@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/select.h>
+#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 
@@ -79,6 +80,8 @@ struct Module *add_module(const char *command, const char *prefix, int type, int
     }
 
     module->pid = pid;
+    clock_gettime(CLOCK_MONOTONIC, &module->last_updated);
+
     return module;
 }
 
@@ -103,6 +106,7 @@ void remove_module(struct Module *module)
 void free_module(struct Module *module)
 {
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, module->fd[0], NULL);
+    free(module->command);
     close(module->fd[0]);
     free(module);
 }
