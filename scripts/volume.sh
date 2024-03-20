@@ -1,5 +1,6 @@
 #!/bin/sh
-# echo ♪ $($HOME/scripts/volume.sh get_volume | tr -d %)
+# label=♪
+action=pavucontrol
 
 Get() {
 	if [ $(pamixer --get-mute) = "true" ]; then
@@ -9,4 +10,4 @@ Get() {
 	fi
 }
 
-echo v: $(Get)
+echo -e "%{A1:${action}:}v: $(Get)%{A}"

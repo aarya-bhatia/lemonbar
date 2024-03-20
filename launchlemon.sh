@@ -2,6 +2,7 @@
 
 handler() {
 	while read line; do
+		echo "Action requested: $line"
 		$line &
 	done
 }
@@ -11,16 +12,13 @@ project_monitor() {
 }
 
 start_top() {
-	bin/topbar | lemonbar -p -g x24++ \
+	bin/topbar 2>/tmp/lemonbar1.log | lemonbar -p -g x24++ \
 		-F#ffffff -B#222222 -U#268BD2 -u 2 \
-		-f "FreeMono:size=10" \
-		-f "Font Awesome 6 Free"  \
-		-f "Font Awesome 6 Brands" \
-		-f "Font Awesome 6 Free Solid" | handler
+		-f "FreeMono:size=10" | handler
 }
 
 start_bottom() {
-	bin/bottombar | lemonbar -b -p -g x24++ \
+	bin/bottombar 2>/tmp/lemonbar2.log | lemonbar -b -p -g x24++ \
 		-F#ffffff -B#222222 -U#268BD2 -u 2 \
 		-f "FreeMono:size=10" \
 		-f "Font Awesome 6 Free"  \
@@ -39,7 +37,7 @@ kill
 source /home/aarya/pyvenv/bin/activate
 cd /home/aarya/repos/aarya-bhatia/lemonbar
 make
-start_top  &
-start_bottom  &
+start_top &
+start_bottom &
 echo "lemonbar launched..."
 
