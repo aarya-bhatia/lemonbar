@@ -11,7 +11,8 @@ project_monitor() {
 }
 
 start_top() {
-	bin/main config_top | project_monitor |
+	# bin/main config_top | project_monitor |
+	bin/main config_top |
 		lemonbar -p -g x24++ \
 		-F#ffffff -B#222222 -U#268BD2 -u 2 \
 		-f "FreeMono:size=10" \
@@ -31,7 +32,7 @@ start_bottom() {
 }
 
 kill() {
-	pkill -f /home/aarya/repos/aarya-bhatia/lemonbar/bin/main
+	pkill -f bin/main
 	pkill -f /home/aarya/scripts/lemonbar
 	pkill -x lemonbar
 }
